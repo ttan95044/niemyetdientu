@@ -4,18 +4,25 @@ import 'package:niemyetdientu/model/category_model.dart';
 
 class CategoryService {
   static const String apiUrl = "http://42.1.111.50:8065/api/fields";
+  static const String apiKey =
+      '8c38f8c9cc90ca3fed786e537bd952bd18a82d1771d7774f7dbdbd3c35982bf2';
 
   static Future<List<CategoryModel>> fetchCategories() async {
-    final response = await http.get(Uri.parse(apiUrl));
+    final response = await http.get(
+      Uri.parse(apiUrl),
+      headers: {'X-API-KEY': apiKey, 'Accept': 'application/json'},
+    );
+
     if (response.statusCode == 200) {
       final List<dynamic> data = json.decode(response.body);
+
       return data.map((item) {
-        final id = item["id"] as int;
+        final id = item['id'] as int;
         final model = CategoryModel.fromJson(item);
         return model.copyWith(icon: _getIconById(id), color: _getColorById(id));
       }).toList();
     } else {
-      throw Exception("Lỗi tải danh mục: ${response.statusCode}");
+      throw Exception('Lỗi tải danh mục: ${response.statusCode}');
     }
   }
 

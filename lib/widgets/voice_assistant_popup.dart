@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:niemyetdientu/service/chatbot_service.dart';
-import 'package:pdf/pdf.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:typed_data';
-import 'package:flutter/services.dart' show rootBundle;
-
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 class VoiceAssistantPopup extends StatefulWidget {
   const VoiceAssistantPopup({super.key});
@@ -97,81 +91,6 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
     }
   }
 
-  Future<void> _handlePrint() async {
-    try {
-      final pw.Document doc = pw.Document();
-      final now = DateTime.now();
-
-      pw.Font? vietnamFont;
-      try {
-        final ByteData bytes = await rootBundle.load(
-          'assets/fonts/NotoSans-Regular.ttf',
-        );
-        vietnamFont = pw.Font.ttf(bytes);
-      } catch (e) {
-        vietnamFont = null;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Thiếu font tiếng Việt (assets/fonts/NotoSans-Regular.ttf). Vui lòng thêm để hiển thị dấu đúng.',
-            ),
-          ),
-        );
-      }
-
-      doc.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (pw.Context ctx) {
-            return pw.Center(
-              child: pw.Column(
-                mainAxisSize: pw.MainAxisSize.min,
-                children: [
-                  pw.Text(
-                    'Bản in kiểm tra',
-                    style: pw.TextStyle(
-                      font: vietnamFont,
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 12),
-                  pw.Text(
-                    'Ứng dụng: NiemyetDientu',
-                    style: pw.TextStyle(font: vietnamFont),
-                  ),
-                  pw.SizedBox(height: 6),
-                  pw.Text(
-                    'Thời gian: ${now.toIso8601String()}',
-                    style: pw.TextStyle(font: vietnamFont),
-                  ),
-                  pw.SizedBox(height: 12),
-                  pw.Text(
-                    'Nội dung: In thử để kiểm tra kết nối máy in (Wi-Fi).',
-                    style: pw.TextStyle(font: vietnamFont),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      );
-
-      final Uint8List bytes = await doc.save();
-
-      await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => bytes);
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Mở hộp thoại in (test).')));
-    } catch (e) {
-      debugPrint('❌ Lỗi khi in: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi khi in: $e')));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -181,13 +100,6 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
         centerTitle: true,
         backgroundColor: Colors.blue.shade600,
         foregroundColor: Colors.white,
-        actions: <Widget>[
-          IconButton(
-            icon: const Icon(Icons.print),
-            tooltip: 'Print',
-            onPressed: _handlePrint,
-          ),
-        ],
       ),
       body: Column(
         children: [
