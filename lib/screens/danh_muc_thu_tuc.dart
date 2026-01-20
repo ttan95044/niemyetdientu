@@ -31,6 +31,7 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
       backgroundColor: Colors.transparent, // để viền bo đẹp hơn
       builder: (context) {
         return FractionallySizedBox(
+          widthFactor: 1,
           heightFactor:
               0.85, // 👈 85% chiều cao màn hình (giảm nếu muốn thấp hơn)
           child: const VoiceAssistantPopup(),
@@ -156,15 +157,6 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
                 fit: BoxFit.contain,
                 color: Colors.white,
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            "Trợ lý AI",
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.black87,
-              fontWeight: FontWeight.w600,
             ),
           ),
         ],

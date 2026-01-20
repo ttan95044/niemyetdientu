@@ -2,18 +2,14 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:niemyetdientu/model/procedure_model.dart';
 import 'package:niemyetdientu/model/procedure_detail_model.dart';
+import 'package:niemyetdientu/service/base.dart';
 
 class ProcedureService {
   /// 🌐 Base API
-  static const String _baseUrl = 'http://42.1.111.50:8065/api';
+  static const String _baseUrl = BaseService.apiUrl;
 
-  /// 🔐 API KEY (nên đưa sang .env khi build production)
-  static const String _apiKey =
-      '8c38f8c9cc90ca3fed786e537bd952bd18a82d1771d7774f7dbdbd3c35982bf2';
-
-  /// 📦 Header dùng chung
   static const Map<String, String> _headers = {
-    'X-API-KEY': _apiKey,
+    'X-API-KEY': BaseService.apiKey,
     'Accept': 'application/json',
     'Content-Type': 'application/json',
   };
