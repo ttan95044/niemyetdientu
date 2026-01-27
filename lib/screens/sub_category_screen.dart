@@ -69,9 +69,21 @@ class _SubCategoryScreenState extends State<SubCategoryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.category.title,
-          style: const TextStyle(fontSize: 42),
+        title: LayoutBuilder(
+          builder: (context, constraints) {
+            final screenW = MediaQuery.of(context).size.width;
+            final double fontSize = screenW >= 1200
+                ? 28
+                : screenW >= 800
+                ? 22
+                : 18;
+            return Text(
+              widget.category.title,
+              style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            );
+          },
         ),
         backgroundColor: borderColor,
         foregroundColor: Colors.white,
@@ -89,6 +101,15 @@ class _SubCategoryScreenState extends State<SubCategoryScreen> {
                     decoration: InputDecoration(
                       hintText: "Tìm kiếm thủ tục con...",
                       prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      suffixIcon: _query.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.grey),
+                              onPressed: () => setState(() {
+                                _searchController.clear();
+                                _query = '';
+                              }),
+                            )
+                          : null,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
@@ -107,52 +128,67 @@ class _SubCategoryScreenState extends State<SubCategoryScreen> {
                     onChanged: (value) => setState(() => _query = value),
                   ),
                 ),
+
                 Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = (constraints.maxWidth ~/ 280)
+                          .clamp(1, 6);
+                      final double tileWidth =
+                          (constraints.maxWidth - (crossAxisCount - 1) * 16) /
+                          crossAxisCount;
+                      final double childAspect =
+                          tileWidth / 92; // aim for ~92px height
+
+                      return GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
-                          childAspectRatio: 2.5,
+                          childAspectRatio: childAspect.clamp(1.8, 4.5),
                         ),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final p = filtered[index];
-                      return GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DetailScreen(code: p.code),
-                          ),
-                        ),
-
-                        child: Container(
-                          decoration: BoxDecoration(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final p = filtered[index];
+                          return Material(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: borderColor, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: borderColor.withOpacity(0.2),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              p.name,
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: borderColor,
-                              ),
-                              textAlign: TextAlign.center,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: borderColor, width: 1.5),
                             ),
-                          ),
-                        ),
+                            elevation: 1,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      DetailScreen(code: p.code),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12.0,
+                                  vertical: 10.0,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    p.name,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: borderColor,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),

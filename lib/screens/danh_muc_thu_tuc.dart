@@ -52,14 +52,14 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
-            fontSize: 42,
+            fontSize: 20,
           ),
         ),
+        centerTitle: false,
       ),
 
       body: Column(
         children: [
-          // 🔎 Thanh tìm kiếm
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
             child: TextField(
@@ -67,6 +67,15 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
               decoration: InputDecoration(
                 hintText: "Tìm kiếm nhóm lĩnh vực",
                 prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () => setState(() {
+                          _searchController.clear();
+                          _query = "";
+                        }),
+                      )
+                    : null,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
@@ -115,7 +124,7 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
                   padding: const EdgeInsets.all(16),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      int crossAxisCount = (constraints.maxWidth ~/ 270).clamp(
+                      int crossAxisCount = (constraints.maxWidth ~/ 250).clamp(
                         1,
                         6,
                       );
@@ -124,11 +133,14 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
                           crossAxisCount: crossAxisCount,
                           crossAxisSpacing: 18,
                           mainAxisSpacing: 18,
-                          childAspectRatio: 2.5,
+                          childAspectRatio: 3.4,
                         ),
                         itemCount: filteredItems.length,
                         itemBuilder: (context, index) {
-                          return CategoryCard(category: filteredItems[index]);
+                          return CategoryCard(
+                            category: filteredItems[index],
+                            height: 96,
+                          );
                         },
                       );
                     },
@@ -155,7 +167,10 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
                 width: 38,
                 height: 38,
                 fit: BoxFit.contain,
-                color: Colors.white,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
               ),
             ),
           ),

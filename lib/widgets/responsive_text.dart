@@ -9,7 +9,6 @@ class ResponsiveText extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // Thay đổi size chữ theo độ rộng màn hình
     double fontSize = screenWidth < 360 ? 10 : (screenWidth < 480 ? 24 : 24);
 
     return Text(
@@ -19,7 +18,7 @@ class ResponsiveText extends StatelessWidget {
         fontWeight: FontWeight.w600,
         color: Colors.white,
       ),
-      overflow: TextOverflow.ellipsis,
+      softWrap: true,
     );
   }
 }
