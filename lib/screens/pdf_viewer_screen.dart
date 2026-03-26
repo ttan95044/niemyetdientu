@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:niemyetdientu/model/pdf_text_item.dart';
 import 'package:niemyetdientu/widgets/pdf_editor_overlay.dart';
-import 'package:niemyetdientu/widgets/edit_text_form.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
@@ -89,43 +88,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     );
   }
 
-  /// Thanh công cụ chứa input field và nút chỉnh sửa
+  /// Thanh công cụ chứa nút thêm text và hiển thị số lượng
   Widget _buildToolbar() {
     return Container(
       padding: const EdgeInsets.all(12),
       color: Colors.grey[100],
       child: Row(
         children: [
-          /// Input field để nhập text
-          Expanded(child: EditTextForm(onAddText: _onAddTextItem)),
-
-          /// Nút xóa text được chọn
-          if (selectedItem != null) ...[
-            const SizedBox(width: 8),
-            Tooltip(
-              message: 'Xóa text',
-              child: IconButton(
-                onPressed: _deleteSelectedText,
-                icon: const Icon(Icons.delete),
-                color: Colors.red,
-              ),
-            ),
-          ],
-
-          /// Nút chi tiết chỉnh sửa text được chọn
-          if (selectedItem != null) ...[
-            const SizedBox(width: 8),
-            Tooltip(
-              message: 'Chỉnh sửa text',
-              child: IconButton(
-                onPressed: () => _showEditTextDialog(selectedItem!),
-                icon: const Icon(Icons.edit),
-              ),
-            ),
-          ],
+          /// Nút thêm text mới
+          ElevatedButton.icon(
+            onPressed: _showAddTextModal,
+            icon: const Icon(Icons.add),
+            label: const Text('Thêm text'),
+          ),
 
           /// Hiển thị số text được thêm
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           Tooltip(
             message: 'Số text được thêm',
             child: Chip(
@@ -134,6 +112,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               labelStyle: const TextStyle(color: Colors.white),
             ),
           ),
+
+          const Spacer(),
         ],
       ),
     );
@@ -160,51 +140,51 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 zoomLevel = zoomLevel.clamp(minZoom, maxZoom);
               });
             },
-            child: Stack(
-              children: [
-                /// PDF Viewer
-                PDFView(
-                  filePath: widget.filePath,
-                  enableSwipe: true,
-                  swipeHorizontal: false,
-                  autoSpacing: true,
-                  pageFling: true,
-                ),
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 612 / 792, // PDF aspect ratio
+                child: Stack(
+                  children: [
+                    /// PDF Viewer
+                    PDFView(
+                      filePath: widget.filePath,
+                      enableSwipe: true,
+                      swipeHorizontal: false,
+                      autoSpacing: true,
+                      pageFling: true,
+                    ),
 
-                /// Text Overlay trên PDF
-                PdfEditorOverlay(
-                  textItems: textItems,
-                  zoomLevel: 1.0,
-                  transformationMatrix: _transformationController.value,
-                  selectedItem: selectedItem,
-                  onTextSelected: (item) {
-                    setState(() {
-                      selectedItem = item;
-                    });
-                  },
-                  onTextPositionChanged: (item, newX, newY) {
-                    setState(() {
-                      final index = textItems.indexWhere(
-                        (t) => t.id == item.id,
-                      );
-                      if (index != -1) {
-                        textItems[index] = item.copyWith(x: newX, y: newY);
-                      }
-                    });
-                  },
-                  onTextSizeChanged: (item, newSize) {
-                    setState(() {
-                      final index = textItems.indexWhere(
-                        (t) => t.id == item.id,
-                      );
-                      if (index != -1) {
-                        textItems[index] = item.copyWith(fontSize: newSize);
-                        selectedItem = textItems[index];
-                      }
-                    });
-                  },
+                    /// Text Overlay trên PDF
+                    PdfEditorOverlay(
+                      textItems: textItems,
+                      zoomLevel: zoomLevel,
+                      transformationMatrix: _transformationController.value,
+                      selectedItem: selectedItem,
+                      onTextSelected: (item) {
+                        setState(() {
+                          selectedItem = item.id.isEmpty ? null : item;
+                        });
+                      },
+                      onTextPositionChanged: (item, newX, newY) {
+                        setState(() {
+                          final index = textItems.indexWhere(
+                            (t) => t.id == item.id,
+                          );
+                          if (index != -1) {
+                            textItems[index] = item.copyWith(x: newX, y: newY);
+                          }
+                        });
+                      },
+                      onTextDeleted: (item) {
+                        setState(() {
+                          textItems.removeWhere((t) => t.id == item.id);
+                          selectedItem = null;
+                        });
+                      },
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -297,104 +277,100 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     _transformationController.value = Matrix4.identity()..scale(zoomLevel);
   }
 
-  /// Thêm text item mới
-  void _onAddTextItem(String text) {
-    if (text.trim().isEmpty) return;
-
-    final newItem = PdfTextItem(
-      id: 'text_${nextTextId++}',
-      text: text,
-      x: 50, // Vị trí mặc định
-      y: 50,
-    );
-
-    setState(() {
-      textItems.add(newItem);
-      selectedItem = newItem;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✅ Đã thêm text. Kéo thả để di chuyển vị trí'),
-      ),
-    );
-  }
-
-  /// Xóa text được chọn
-  void _deleteSelectedText() {
-    if (selectedItem == null) return;
-
-    setState(() {
-      textItems.removeWhere((t) => t.id == selectedItem!.id);
-      selectedItem = null;
-    });
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('🗑️ Đã xóa text')));
-  }
-
-  /// Hiển thị dialog chỉnh sửa text
-  Future<void> _showEditTextDialog(PdfTextItem item) {
-    final textController = TextEditingController(text: item.text);
-    final fontSizeController = TextEditingController(
-      text: item.fontSize.toString(),
-    );
+  /// Hiển thị modal để thêm text mới
+  Future<void> _showAddTextModal() {
+    final textController = TextEditingController();
+    final fontSizeController = TextEditingController(text: '16');
 
     return showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Chỉnh sửa text'),
+          title: const Text('Thêm text mới'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                /// Input text
+                /// Text content
                 TextField(
                   controller: textController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nội dung',
-                    border: OutlineInputBorder(),
-                  ),
                   maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Nội dung',
+                    hintText: 'Nhập nội dung text...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
                 /// Font size
                 TextField(
                   controller: fontSizeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Kích thước chữ',
-                    border: OutlineInputBorder(),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
-                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Kích thước (pt)',
+                    hintText: '16',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
                 ),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Hủy'),
             ),
             ElevatedButton(
               onPressed: () {
-                final newFontSize =
-                    double.tryParse(fontSizeController.text) ?? item.fontSize;
-                setState(() {
-                  final index = textItems.indexWhere((t) => t.id == item.id);
-                  if (index != -1) {
-                    textItems[index] = item.copyWith(
-                      text: textController.text,
-                      fontSize: newFontSize,
-                    );
-                    selectedItem = textItems[index];
-                  }
-                });
-                Navigator.pop(context);
+                if (textController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('❌ Vui lòng nhập nội dung')),
+                  );
+                  return;
+                }
+
+                try {
+                  final newFontSize = double.parse(
+                    fontSizeController.text.isNotEmpty
+                        ? fontSizeController.text
+                        : '16',
+                  ).clamp(2.0, 72.0);
+
+                  final newItem = PdfTextItem(
+                    id: 'text_${nextTextId++}',
+                    text: textController.text,
+                    x: 50,
+                    y: 50,
+                    fontSize: newFontSize,
+                  );
+
+                  setState(() {
+                    textItems.add(newItem);
+                    selectedItem = newItem;
+                  });
+
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Đã thêm text. Kéo thả để di chuyển'),
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('❌ Kích thước không hợp lệ')),
+                  );
+                }
               },
-              child: const Text('Lưu'),
+              child: const Text('Thêm'),
             ),
           ],
         );
@@ -432,6 +408,28 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         '📝 Có ${textItems.length} text được thêm, render PDF với overlay...',
       );
 
+      /// 📐 Log A4 page dimensions
+      const pdfWidth = 612.0;
+      const pdfHeight = 792.0;
+      final a4Width = PdfPageFormat.a4.width;
+      final a4Height = PdfPageFormat.a4.height;
+      debugPrint('');
+      debugPrint('═══════════════════════════════════════════════════');
+      debugPrint('📄 PREVIEW PAGE SIZE (A4):');
+      debugPrint('   → Width: ${a4Width.toStringAsFixed(2)} pt');
+      debugPrint('   → Height: ${a4Height.toStringAsFixed(2)} pt');
+      debugPrint(
+        '   → Aspect ratio: ${(a4Width / a4Height).toStringAsFixed(4)}',
+      );
+      debugPrint(
+        '📄 PDF Original: ${pdfWidth.toStringAsFixed(2)}×${pdfHeight.toStringAsFixed(2)} pt',
+      );
+      debugPrint(
+        '   → Aspect ratio: ${(pdfWidth / pdfHeight).toStringAsFixed(4)}',
+      );
+      debugPrint('═══════════════════════════════════════════════════');
+      debugPrint('');
+
       /// Tạo document PDF mới
       final pdf = pw.Document();
 
@@ -456,8 +454,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             /// Lấy trang từ PDF gốc
             final pdfPage = await document.getPage(pageIndex + 1);
 
-            /// Render trang thành image
-            final pageImage = await pdfPage.render(width: 1920, height: 1920);
+            /// Render trang thành image, maintaining PDF aspect ratio (612:792)
+            /// Render dimensions: 1200 x 1552 (maintains 612:792 ratio exactly for accurate positioning)
+            final pageImage = await pdfPage.render(width: 1200, height: 1552);
 
             if (pageImage == null) {
               throw Exception('Render trang $pageNum trả về null');
@@ -476,23 +475,82 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 pageFormat: PdfPageFormat.a4,
                 margin: pw.EdgeInsets.zero,
                 build: (pw.Context context) {
+                  // PDF original dimensions
+                  const pdfWidth = 612.0;
+                  const pdfHeight = 792.0;
+
+                  final a4Width = PdfPageFormat.a4.width;
+                  final a4Height = PdfPageFormat.a4.height;
+
+                  /// Scale PDF to fit within A4 maintaining PDF aspect ratio
+                  final scaleX = a4Width / pdfWidth; // 0.9727
+                  final scaleY = a4Height / pdfHeight; // 1.0631
+                  final scale = (scaleX < scaleY)
+                      ? scaleX
+                      : scaleY; // Use min = 0.9727
+
+                  /// Calculate centering offset based on scaled PDF
+                  final scaledPdfWidth = pdfWidth * scale;
+                  final scaledPdfHeight = pdfHeight * scale;
+                  final offsetX = (a4Width - scaledPdfWidth) / 2;
+                  // For offsetY: don't add full centering offset for text
+                  // Use half the offset to account for proper text alignment
+                  final offsetY = (a4Height - scaledPdfHeight) / 2 * 0.5;
+
                   return pw.Stack(
                     children: [
-                      /// Nhúng image của trang PDF gốc
-                      pw.Positioned.fill(
-                        child: pw.Image(pwImage, fit: pw.BoxFit.cover),
+                      /// Nhúng image của trang PDF gốc với positioning cụ thể
+                      /// Định vị tại offset tính toán từ PDF scaling
+                      pw.Positioned(
+                        left: offsetX,
+                        top: offsetY,
+                        child: pw.SizedBox(
+                          width: scaledPdfWidth,
+                          height: scaledPdfHeight,
+                          child: pw.Image(pwImage),
+                        ),
                       ),
 
                       /// Text overlay - chèn các text item (chỉ hiện trên trang 1)
+                      /// Dùng cùng scale và offset với image
                       if (pageIndex == 0)
                         ...textItems.map((item) {
+                          /// Final position: scale PDF coords then add offset
+                          final finalX = item.x * scale + offsetX;
+                          final finalY = item.y * scale + offsetY;
+
+                          /// Font scaling
+                          final scaleFontSize = scale;
+
+                          /// 📐 DEBUG: Log positioning details
+                          debugPrint('');
+                          debugPrint(
+                            '📋 MAIN PDF TEXT: "${item.text}" (ID: ${item.id})',
+                          );
+                          debugPrint(
+                            '  PDF SPACE: x=${item.x.toStringAsFixed(2)}, y=${item.y.toStringAsFixed(2)}',
+                          );
+                          debugPrint(
+                            '  Scale PDF→A4: ${scale.toStringAsFixed(4)} (min of X=${scaleX.toStringAsFixed(4)}, Y=${scaleY.toStringAsFixed(4)})',
+                          );
+                          debugPrint(
+                            '  Centering offset: X=${offsetX.toStringAsFixed(2)}, Y=${offsetY.toStringAsFixed(2)}',
+                          );
+                          debugPrint('  Final A4 position with offset:');
+                          debugPrint(
+                            '    finalX=${finalX.toStringAsFixed(2)}, finalY=${finalY.toStringAsFixed(2)}',
+                          );
+                          debugPrint(
+                            '    fontSize=${item.fontSize} * ${scaleFontSize.toStringAsFixed(4)} = ${(item.fontSize * scaleFontSize).toStringAsFixed(2)}',
+                          );
+
                           return pw.Positioned(
-                            left: item.x,
-                            top: item.y,
+                            left: finalX,
+                            top: finalY,
                             child: pw.Text(
                               item.text,
                               style: pw.TextStyle(
-                                fontSize: item.fontSize,
+                                fontSize: item.fontSize * scaleFontSize,
                                 color: _parseColor(item.fontColor),
                                 fontWeight: pw.FontWeight.bold,
                               ),
@@ -520,13 +578,45 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       ),
                       if (pageIndex == 0)
                         ...textItems.map((item) {
+                          const pdfWidth = 612.0;
+                          const pdfHeight = 792.0;
+                          final a4Width = PdfPageFormat.a4.width; // 595.28
+                          final a4Height = PdfPageFormat.a4.height; // 841.89
+
+                          /// Scale PDF to fit within A4 maintaining PDF aspect ratio
+                          final scaleX = a4Width / pdfWidth;
+                          final scaleY = a4Height / pdfHeight;
+                          final scale = (scaleX < scaleY) ? scaleX : scaleY;
+
+                          final scaledPdfWidth = pdfWidth * scale;
+                          final scaledPdfHeight = pdfHeight * scale;
+                          final offsetX = (a4Width - scaledPdfWidth) / 2;
+                          final offsetY = (a4Height - scaledPdfHeight) / 2;
+
+                          final finalX = item.x * scale + offsetX;
+                          final finalY = item.y * scale + offsetY;
+                          final scaleFontSize = scale;
+
+                          /// 📐 DEBUG: Log (fallback 1)
+                          debugPrint('');
+                          debugPrint('📋 FALLBACK1 TEXT: "${item.text}"');
+                          debugPrint(
+                            '  PDF: x=${item.x.toStringAsFixed(2)}, y=${item.y.toStringAsFixed(2)}',
+                          );
+                          debugPrint(
+                            '  Scale: ${scale.toStringAsFixed(4)}, Offset: (${offsetX.toStringAsFixed(2)}, ${offsetY.toStringAsFixed(2)})',
+                          );
+                          debugPrint(
+                            '  A4 final: x=${finalX.toStringAsFixed(2)}, y=${finalY.toStringAsFixed(2)}',
+                          );
+
                           return pw.Positioned(
-                            left: item.x,
-                            top: item.y,
+                            left: finalX,
+                            top: finalY,
                             child: pw.Text(
                               item.text,
                               style: pw.TextStyle(
-                                fontSize: item.fontSize,
+                                fontSize: item.fontSize * scaleFontSize,
                                 color: _parseColor(item.fontColor),
                                 fontWeight: pw.FontWeight.bold,
                               ),
@@ -557,13 +647,45 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     child: pw.Container(color: PdfColors.white),
                   ),
                   ...textItems.map((item) {
+                    const pdfWidth = 612.0;
+                    const pdfHeight = 792.0;
+                    final a4Width = PdfPageFormat.a4.width;
+                    final a4Height = PdfPageFormat.a4.height;
+
+                    /// Scale PDF to fit within A4 maintaining PDF aspect ratio
+                    final scaleX = a4Width / pdfWidth;
+                    final scaleY = a4Height / pdfHeight;
+                    final scale = (scaleX < scaleY) ? scaleX : scaleY;
+
+                    final scaledPdfWidth = pdfWidth * scale;
+                    final scaledPdfHeight = pdfHeight * scale;
+                    final offsetX = (a4Width - scaledPdfWidth) / 2;
+                    final offsetY = (a4Height - scaledPdfHeight) / 2;
+
+                    final finalX = item.x * scale + offsetX;
+                    final finalY = item.y * scale + offsetY;
+                    final scaleFontSize = scale;
+
+                    /// 📐 DEBUG: Log (fallback 2 - white bg)
+                    debugPrint('');
+                    debugPrint('📋 FALLBACK2 (WHITE) TEXT: "${item.text}"');
+                    debugPrint(
+                      '  PDF: x=${item.x.toStringAsFixed(2)}, y=${item.y.toStringAsFixed(2)}',
+                    );
+                    debugPrint(
+                      '  Scale: ${scale.toStringAsFixed(4)}, Offset: (${offsetX.toStringAsFixed(2)}, ${offsetY.toStringAsFixed(2)})',
+                    );
+                    debugPrint(
+                      '  A4 final: x=${finalX.toStringAsFixed(2)}, y=${finalY.toStringAsFixed(2)}',
+                    );
+
                     return pw.Positioned(
-                      left: item.x,
-                      top: item.y,
+                      left: finalX,
+                      top: finalY,
                       child: pw.Text(
                         item.text,
                         style: pw.TextStyle(
-                          fontSize: item.fontSize,
+                          fontSize: item.fontSize * scaleFontSize,
                           color: _parseColor(item.fontColor),
                           fontWeight: pw.FontWeight.bold,
                         ),

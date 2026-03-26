@@ -5,7 +5,7 @@ class PdfEditorOverlay extends StatefulWidget {
   final List<PdfTextItem> textItems;
   final Function(PdfTextItem) onTextSelected;
   final Function(PdfTextItem, double, double) onTextPositionChanged;
-  final Function(PdfTextItem, double)? onTextSizeChanged;
+  final Function(PdfTextItem)? onTextDeleted;
   final double zoomLevel;
   final Matrix4? transformationMatrix;
   final PdfTextItem? selectedItem;
@@ -15,7 +15,7 @@ class PdfEditorOverlay extends StatefulWidget {
     required this.textItems,
     required this.onTextSelected,
     required this.onTextPositionChanged,
-    this.onTextSizeChanged,
+    this.onTextDeleted,
     this.zoomLevel = 1.0,
     this.transformationMatrix,
     this.selectedItem,
@@ -31,9 +31,6 @@ class _PdfEditorOverlayState extends State<PdfEditorOverlay> {
 
   /// Global key để lấy position của Stack
   final GlobalKey _stackKey = GlobalKey();
-
-  /// Track initial font size khi bắt đầu pinch
-  double _initialFontSize = 16.0;
 
   @override
   Widget build(BuildContext context) {
@@ -61,103 +58,121 @@ class _PdfEditorOverlayState extends State<PdfEditorOverlay> {
   Widget _buildDraggableTextItem(PdfTextItem item) {
     final isSelected = widget.selectedItem?.id == item.id;
 
+    /// Convert từ PDF coordinates sang screen pixels (tại zoom = 1.0)
+    /// InteractiveViewer sẽ handle zoom/pan transform
+    const pdfPageWidth = 612.0;
+    const pdfPageHeight = 792.0;
+
+    // Get stack size
+    final stackRenderBox =
+        _stackKey.currentContext?.findRenderObject() as RenderBox?;
+    final stackSize = stackRenderBox?.size ?? const Size(600, 800);
+
+    // 📐 DEBUG: Log stack size lần đầu
+    if (item == widget.textItems.firstOrNull) {
+      debugPrint('');
+      debugPrint('═══════════════════════════════════════════════════');
+      debugPrint('📐 EDITOR UI SIZE:');
+      debugPrint(
+        '   → Stack: ${stackSize.width.toStringAsFixed(2)}×${stackSize.height.toStringAsFixed(2)} pixels',
+      );
+      debugPrint(
+        '   → Aspect ratio: ${(stackSize.width / stackSize.height).toStringAsFixed(4)}',
+      );
+      debugPrint(
+        '   → PDF aspect: ${(pdfPageWidth / pdfPageHeight).toStringAsFixed(4)} (612/792)',
+      );
+      debugPrint('═══════════════════════════════════════════════════');
+      debugPrint('');
+    }
+
+    // Position tại zoom = 1.0 (before InteractiveViewer's matrix transform)
+    final screenX = item.x * (stackSize.width / pdfPageWidth);
+    final screenY = item.y * (stackSize.height / pdfPageHeight);
+
     return Positioned(
-      left: item.x,
-      top: item.y,
-      child: DragTarget<PdfTextItem>(
-        onAccept: (draggedItem) {
-          /// Không cần xử lý ở đây vì Draggable sẽ xử lý
+      left: screenX,
+      top: screenY,
+      child: Draggable<PdfTextItem>(
+        data: item,
+        feedback: _buildTextWidget(item, isSelected: true, isDragging: true),
+        onDragStarted: () {
+          /// Bắt đầu kéo
+          draggedItem = item;
+          widget.onTextSelected(item);
         },
-        builder: (context, candidateData, rejectedData) {
-          return Draggable<PdfTextItem>(
-            data: item,
-            feedback: _buildTextWidget(
-              item,
-              isSelected: true,
-              isDragging: true,
-            ),
-            onDragStarted: () {
-              /// Bắt đầu kéo
-              draggedItem = item;
-              widget.onTextSelected(item);
-            },
-            onDraggableCanceled: (velocity, offset) {
-              /// Kết thúc kéo
-              draggedItem = null;
+        onDraggableCanceled: (velocity, offset) {
+          /// Kết thúc kéo
+          draggedItem = null;
 
-              /// Cập nhật vị trí mới - convert global offset sang local coords
-              final stackRenderBox =
-                  _stackKey.currentContext?.findRenderObject() as RenderBox?;
-              if (stackRenderBox != null) {
-                final stackGlobalOffset = stackRenderBox.localToGlobal(
-                  Offset.zero,
-                );
+          /// Cập nhật vị trí mới - convert global offset sang PDF coordinates
+          final stackRenderBox =
+              _stackKey.currentContext?.findRenderObject() as RenderBox?;
+          if (stackRenderBox != null) {
+            final stackGlobalOffset = stackRenderBox.localToGlobal(Offset.zero);
+            final stackSize = stackRenderBox.size;
 
-                /// Local coords của drag position (trước inverse transformation)
-                var localX = (offset.dx - stackGlobalOffset.dx).clamp(
-                  0.0,
-                  double.infinity,
-                );
-                var localY = (offset.dy - stackGlobalOffset.dy).clamp(
-                  0.0,
-                  double.infinity,
-                );
+            /// Local coords của drag position (trên screen, pre-zoom)
+            var localX = (offset.dx - stackGlobalOffset.dx);
+            var localY = (offset.dy - stackGlobalOffset.dy);
 
-                /// Inverse transformation matrix để get actual coords
-                /// (undo InteractiveViewer's transform)
-                final matrix = widget.transformationMatrix;
-                if (matrix != null) {
-                  try {
-                    /// Extract scale từ transformation matrix
-                    final scale = matrix.getMaxScaleOnAxis();
+            // Undo zoom effect từ InteractiveViewer
+            // Khi zoom = 2x, offset đã bao gồm 2x scale, cần chia cho 2
+            localX = localX / widget.zoomLevel;
+            localY = localY / widget.zoomLevel;
 
-                    if (scale > 0) {
-                      localX = localX / scale;
-                      localY = localY / scale;
-                    }
-                  } catch (e) {
-                    debugPrint('❌ Lỗi inverse matrix: $e');
-                  }
-                }
+            /// Convert từ screen pixels sang PDF coordinates
+            const pdfPageWidth = 612.0;
+            const pdfPageHeight = 792.0;
 
-                widget.onTextPositionChanged(item, localX, localY);
-              }
-            },
-            childWhenDragging: Opacity(
-              opacity: 0.5,
-              child: _buildTextWidget(
-                item,
-                isSelected: isSelected,
-                isDragging: true,
-              ),
-            ),
-            child: GestureDetector(
-              onTap: () {
-                widget.onTextSelected(item);
-              },
-              onScaleUpdate: isSelected
-                  ? (ScaleUpdateDetails details) {
-                      /// Resize text khi pinch nếu item được chọn
-                      if (details.pointerCount == 2) {
-                        final newFontSize = (_initialFontSize * details.scale)
-                            .clamp(8.0, 72.0);
-                        widget.onTextSizeChanged?.call(item, newFontSize);
-                      }
-                    }
-                  : null,
-              onScaleStart: isSelected
-                  ? (ScaleStartDetails details) {
-                      _initialFontSize = item.fontSize;
-                    }
-                  : null,
-              child: _buildTextWidget(
-                item,
-                isSelected: isSelected,
-                isDragging: false,
-              ),
-            ),
-          );
+            var pdfX = localX * (pdfPageWidth / stackSize.width);
+            var pdfY = localY * (pdfPageHeight / stackSize.height);
+
+            // Ensure within bounds
+            pdfX = pdfX.clamp(0.0, pdfPageWidth);
+            pdfY = pdfY.clamp(0.0, pdfPageHeight);
+
+            // 📐 DEBUG: Log drag position conversion
+            debugPrint('');
+            debugPrint('🎯 DROP "${item.text}":');
+            debugPrint(
+              '   Screen offset (global): dx=${offset.dx.toStringAsFixed(2)}, dy=${offset.dy.toStringAsFixed(2)}',
+            );
+            debugPrint(
+              '   Stack local (pre-zoom): x=${(offset.dx - stackGlobalOffset.dx).toStringAsFixed(2)}, y=${(offset.dy - stackGlobalOffset.dy).toStringAsFixed(2)}',
+            );
+            debugPrint(
+              '   After zoom undo (÷${widget.zoomLevel.toStringAsFixed(2)}): x=${localX.toStringAsFixed(2)}, y=${localY.toStringAsFixed(2)}',
+            );
+            debugPrint(
+              '   Stack size: ${stackSize.width.toStringAsFixed(2)}×${stackSize.height.toStringAsFixed(2)}',
+            );
+            debugPrint(
+              '   → PDF coords: x=${pdfX.toStringAsFixed(2)}, y=${pdfY.toStringAsFixed(2)}',
+            );
+
+            widget.onTextPositionChanged(item, pdfX, pdfY);
+          }
         },
+        childWhenDragging: Opacity(
+          opacity: 0.5,
+          child: _buildTextWidget(
+            item,
+            isSelected: isSelected,
+            isDragging: true,
+          ),
+        ),
+        child: GestureDetector(
+          onTap: () {
+            widget.onTextSelected(item);
+            _showEditTextModal(context, item);
+          },
+          child: _buildTextWidget(
+            item,
+            isSelected: isSelected,
+            isDragging: false,
+          ),
+        ),
       ),
     );
   }
@@ -168,40 +183,121 @@ class _PdfEditorOverlayState extends State<PdfEditorOverlay> {
     bool isSelected = false,
     bool isDragging = false,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isSelected ? Colors.red : Colors.blue.withOpacity(0.5),
-          width: isSelected ? 2 : 1,
-        ),
-        borderRadius: BorderRadius.circular(4),
-        color: Colors.white.withOpacity(isDragging ? 0.7 : 0.9),
-        boxShadow: [
-          if (isSelected)
-            BoxShadow(
-              color: Colors.red.withOpacity(0.5),
-              blurRadius: 4,
-              spreadRadius: 2,
-            ),
-          if (isDragging)
-            BoxShadow(
-              color: Colors.blue.withOpacity(0.3),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-        ],
+    return Text(
+      item.text,
+      style: TextStyle(
+        fontSize: item.fontSize,
+        color: Colors.black87,
+        fontWeight: FontWeight.w500,
+        shadows: isDragging
+            ? [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
-      child: Text(
-        item.text,
-        style: TextStyle(
-          fontSize: item.fontSize,
-          color: Colors.black87,
-          fontWeight: FontWeight.w500,
-        ),
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-      ),
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  /// Show modal để edit text
+  void _showEditTextModal(BuildContext context, PdfTextItem item) {
+    final textController = TextEditingController(text: item.text);
+    final fontSizeController = TextEditingController(
+      text: item.fontSize.toString(),
+    );
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Chỉnh sửa text'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                /// Text content
+                TextField(
+                  controller: textController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Nội dung',
+                    hintText: 'Nhập nội dung text...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                /// Font size
+                TextField(
+                  controller: fontSizeController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Kích thước (pt)',
+                    hintText: '16',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            /// Delete button
+            TextButton.icon(
+              onPressed: () {
+                widget.onTextDeleted?.call(item);
+                Navigator.pop(dialogContext);
+              },
+              icon: const Icon(Icons.delete, color: Colors.red),
+              label: const Text('Xóa', style: TextStyle(color: Colors.red)),
+            ),
+            const Spacer(),
+
+            /// Cancel button
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+
+            /// Save button
+            ElevatedButton(
+              onPressed: () {
+                try {
+                  final newFontSize = double.parse(
+                    fontSizeController.text.isNotEmpty
+                        ? fontSizeController.text
+                        : item.fontSize.toString(),
+                  ).clamp(2.0, 72.0);
+
+                  final updatedItem = item.copyWith(
+                    text: textController.text,
+                    fontSize: newFontSize,
+                  );
+                  widget.onTextPositionChanged(updatedItem, item.x, item.y);
+                  Navigator.pop(dialogContext);
+                } catch (e) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('❌ Kích thước không hợp lệ')),
+                  );
+                }
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

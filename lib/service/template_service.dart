@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+// import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:niemyetdientu/model/template_model.dart';
 import 'package:niemyetdientu/service/base.dart';
@@ -16,16 +16,16 @@ class TemplateService {
 
   /// 📄 Lấy template (PDF base64) theo template_id
   static Future<TemplateModel> fetchTemplateById(int templateId) async {
-    debugPrint('🟣 [API] fetchTemplateById called with id = $templateId');
-    debugPrint('🟣 [API] id runtimeType = ${templateId.runtimeType}');
+    // debugPrint('🟣 [API] fetchTemplateById called with id = $templateId');
+    // debugPrint('🟣 [API] id runtimeType = ${templateId.runtimeType}');
 
     final url = Uri.parse('$_baseUrl/template/$templateId');
-    debugPrint('🟣 [API] GET $url');
+    // debugPrint('🟣 [API] GET $url');
 
     final response = await http.get(url, headers: _headers);
 
-    debugPrint('🟣 [API] statusCode = ${response.statusCode}');
-    debugPrint('🟣 [API] body = ${response.body.substring(0, 200)}');
+    // debugPrint('🟣 [API] statusCode = ${response.statusCode}');
+    // debugPrint('🟣 [API] body = ${response.body.substring(0, 200)}');
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> json = jsonDecode(response.body);
