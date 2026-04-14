@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:niemyetdientu/model/category_model.dart';
 import 'package:niemyetdientu/screens/sub_category_screen.dart';
-import 'responsive_text.dart';
 
 class CategoryCard extends StatefulWidget {
   final CategoryModel category;

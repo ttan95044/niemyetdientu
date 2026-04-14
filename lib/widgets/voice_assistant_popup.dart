@@ -76,7 +76,7 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
         },
         onError: (error) {
           debugPrint('Speech error: $error');
-          setState(() => _initError = error?.toString());
+          setState(() => _initError = error.toString());
         },
       );
     } catch (e) {
