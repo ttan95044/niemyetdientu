@@ -1,16 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:niemyetdientu/model/category_model.dart';
+import 'package:niemyetdientu/service/base.dart';
+import 'package:flutter/painting.dart';
 
 class CategoryService {
-  static const String apiUrl = "http://42.1.111.50:8065/api/fields";
-  static const String apiKey =
-      '8c38f8c9cc90ca3fed786e537bd952bd18a82d1771d7774f7dbdbd3c35982bf2';
+  static final String apiUrl = "${BaseService.apiUrl}/fields";
 
   static Future<List<CategoryModel>> fetchCategories() async {
     final response = await http.get(
       Uri.parse(apiUrl),
-      headers: {'X-API-KEY': apiKey, 'Accept': 'application/json'},
+      headers: {'X-API-KEY': BaseService.apiKey, 'Accept': 'application/json'},
     );
 
     if (response.statusCode == 200) {
@@ -54,29 +54,24 @@ class CategoryService {
   }
 
   static String _getColorById(int id) {
-    switch (id) {
-      case 1:
-        return "0xFF9C27B0";
-      case 2:
-        return "0xFF00BCD4";
-      case 3:
-        return "0xFFE91E63";
-      case 4:
-        return "0xFF4CAF50";
-      case 5:
-        return "0xFFFF9800";
-      case 6:
-        return "0xFF795548";
-      case 7:
-        return "0xFF3F51B5";
-      case 8:
-        return "0xFF009688";
-      case 9:
-        return "0xFF673AB7";
-      case 10:
-        return "0xFFF44336";
-      default:
-        return "0xFF9E9E9E";
-    }
+    // Base color: 0xFF9C27B0
+    if (id <= 0) return "0xFF9C27B0";
+
+    const int baseColorInt = 0xFF9C27B0;
+    final Color baseColor = Color(baseColorInt);
+    final HSLColor baseHsl = HSLColor.fromColor(baseColor);
+
+    // Use the golden angle (~137.5) to step the hue for good distribution.
+    const double goldenAngle = 137.5;
+    final double hue = (baseHsl.hue + (id - 1) * goldenAngle) % 360;
+
+    final HSLColor newHsl = baseHsl.withHue(hue);
+    final Color newColor = newHsl.toColor();
+
+    final String hex = newColor.value
+        .toRadixString(16)
+        .padLeft(8, '0')
+        .toUpperCase();
+    return '0x$hex';
   }
 }
