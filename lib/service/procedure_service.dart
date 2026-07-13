@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:niemyetdientu/model/procedure_detail_response.dart';
 import 'package:niemyetdientu/model/procedure_model.dart';
-import 'package:niemyetdientu/model/procedure_detail_model.dart';
+import 'package:niemyetdientu/model/procedure_detail.dart';
 import 'package:niemyetdientu/service/base.dart';
 
 class ProcedureService {
@@ -34,8 +35,10 @@ class ProcedureService {
     }
   }
 
-  /// 📄 Lấy **chi tiết một thủ tục** theo code
-  static Future<ProcedureDetail?> fetchProcedureDetail(String code) async {
+  /// 📄 Lấy chi tiết một thủ tục theo code
+  static Future<ProcedureDetailResponse?> fetchProcedureDetail(
+    String code,
+  ) async {
     final url = Uri.parse('$_baseUrl/procedure/$code');
 
     try {
@@ -43,7 +46,8 @@ class ProcedureService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
-        return ProcedureDetail.fromJson(data);
+
+        return ProcedureDetailResponse.fromJson(data);
       } else {
         throw Exception('Lỗi tải chi tiết thủ tục (${response.statusCode})');
       }

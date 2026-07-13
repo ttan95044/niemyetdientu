@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:niemyetdientu/model/category_model.dart';
 import 'package:niemyetdientu/service/category_service.dart';
+import 'package:niemyetdientu/utils/idle_manager.dart';
 import 'package:niemyetdientu/widgets/category_card.dart';
 import 'package:niemyetdientu/widgets/voice_assistant_popup.dart';
 
@@ -22,19 +23,29 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
   void initState() {
     super.initState();
     _futureCategories = CategoryService.fetchCategories();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      IdleManager.start(); // 👈 không cần context
+    });
   }
 
   void showVoicePopup() {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent, // để viền bo đẹp hơn
+      barrierColor: Colors.black54, // nền mờ TV
       builder: (context) {
-        return FractionallySizedBox(
-          widthFactor: 1,
-          heightFactor:
-              0.85, // 👈 85% chiều cao màn hình (giảm nếu muốn thấp hơn)
-          child: const VoiceAssistantPopup(),
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 900, // TV rộng nhưng không full
+              maxHeight: 1200, // 👈 giữ “lưng lưng”
+            ),
+            child: Material(
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: const VoiceAssistantPopup(),
+            ),
+          ),
         );
       },
     );
@@ -42,141 +53,172 @@ class _DanhMucThuTucPageState extends State<DanhMucThuTucPage> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final width = size.width;
+
+    final bool isTV = width >= 1200;
+
+    final double padding = isTV ? 32 : 16;
+    final double spacing = isTV ? 24 : 12;
+    final double searchHeight = isTV ? 72 : 48;
+    final double searchFont = isTV ? 22 : 14;
+    final double titleSize = isTV ? 28 : 20;
+    final double buttonSize = isTV ? 100 : width * 0.14;
+
     return Scaffold(
       backgroundColor: Colors.grey[200],
+
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text(
+        title: Text(
           "Danh mục thủ tục",
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            fontSize: titleSize,
           ),
         ),
-        centerTitle: false,
       ),
 
-      body: Column(
+      body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: "Tìm kiếm nhóm lĩnh vực",
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.grey),
-                        onPressed: () => setState(() {
-                          _searchController.clear();
-                          _query = "";
-                        }),
-                      )
-                    : null,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+          Column(
+            children: [
+              /// 🔍 SEARCH
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  padding,
+                  padding,
+                  padding,
+                  spacing,
                 ),
-                filled: true,
-                fillColor: Colors.white,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: Colors.blue.shade400,
-                    width: 1.5,
+                child: SizedBox(
+                  height: searchHeight,
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(fontSize: searchFont),
+                    decoration: InputDecoration(
+                      hintText: "Tìm kiếm nhóm lĩnh vực",
+                      hintStyle: TextStyle(fontSize: searchFont),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        size: isTV ? 28 : 20,
+                        color: Colors.grey,
+                      ),
+                      suffixIcon: _query.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, size: isTV ? 28 : 20),
+                              onPressed: () => setState(() {
+                                _searchController.clear();
+                                _query = "";
+                              }),
+                            )
+                          : null,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: isTV ? 20 : 12,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(isTV ? 20 : 12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(isTV ? 20 : 12),
+                        borderSide: BorderSide(
+                          color: Colors.blue.shade400,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    onChanged: (value) => setState(() => _query = value),
                   ),
                 ),
               ),
-              onChanged: (value) => setState(() => _query = value),
-            ),
-          ),
 
-          // 📋 Grid danh mục (API)
-          Expanded(
-            child: FutureBuilder<List<CategoryModel>>(
-              future: _futureCategories,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError) {
-                  return Center(
-                    child: Text("Lỗi tải dữ liệu: ${snapshot.error}"),
-                  );
-                }
+              /// 📦 GRID (LUÔN 2 CỘT)
+              Expanded(
+                child: FutureBuilder<List<CategoryModel>>(
+                  future: _futureCategories,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    } else if (snapshot.hasError) {
+                      return Center(child: Text("Lỗi: ${snapshot.error}"));
+                    }
 
-                final categories = snapshot.data ?? [];
-                final filteredItems = categories
-                    .where(
-                      (item) => item.title.toLowerCase().contains(
+                    final categories = snapshot.data ?? [];
+
+                    final filteredItems = categories.where((item) {
+                      return item.title.toLowerCase().contains(
                         _query.toLowerCase(),
-                      ),
-                    )
-                    .toList();
-
-                return Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      int crossAxisCount = (constraints.maxWidth ~/ 250).clamp(
-                        1,
-                        6,
                       );
-                      return GridView.builder(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 18,
-                          mainAxisSpacing: 18,
-                          childAspectRatio: 3.4,
-                        ),
+                    }).toList();
+
+                    return Padding(
+                      padding: EdgeInsets.symmetric(horizontal: padding),
+                      child: GridView.builder(
                         itemCount: filteredItems.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2, // 🔥 LUÔN 2 CỘT
+                          crossAxisSpacing: spacing,
+                          mainAxisSpacing: spacing,
+                          childAspectRatio: isTV ? 4.5 : 3.4,
+                        ),
                         itemBuilder: (context, index) {
                           return CategoryCard(
                             category: filteredItems[index],
-                            height: 96,
+                            height: isTV ? 160 : 96,
                           );
                         },
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
 
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 72,
-            height: 72,
-            child: FloatingActionButton(
-              heroTag: "ai_button",
-              backgroundColor: Colors.blue.shade600,
-              onPressed: showVoicePopup,
-              child: SvgPicture.asset(
-                'assets/icons/bot.svg',
-                width: 38,
-                height: 38,
-                fit: BoxFit.contain,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white,
-                  BlendMode.srcIn,
+          /// 🤖 NÚT CHATBOT (GIỮA MÀN BÊN PHẢI)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: EdgeInsets.only(right: isTV ? 40 : 16),
+              child: GestureDetector(
+                onTap: showVoicePopup,
+                child: Container(
+                  width: buttonSize,
+                  height: buttonSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.blue.shade600,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.4),
+                        blurRadius: isTV ? 30 : 20,
+                        spreadRadius: isTV ? 8 : 5,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: SvgPicture.asset(
+                      'assets/icons/bot.svg',
+                      width: buttonSize * 0.45,
+                      height: buttonSize * 0.45,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

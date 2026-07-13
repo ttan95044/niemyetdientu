@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:niemyetdientu/model/category_model.dart';
+import 'package:niemyetdientu/model/chatbot_result.dart';
+import 'package:niemyetdientu/screens/sub_category_screen.dart';
+import 'package:niemyetdientu/service/category_service.dart';
 import 'package:niemyetdientu/service/chatbot_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -13,8 +17,10 @@ class VoiceAssistantPopup extends StatefulWidget {
 }
 
 class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
-  final stt.SpeechToText _speech = stt.SpeechToText();
+  late stt.SpeechToText _speech;
   final TextEditingController _textController = TextEditingController();
+
+  List<CategoryModel> categories = [];
 
   bool _isListening = false;
   bool _isLoading = false;
@@ -23,9 +29,74 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
 
   final List<_ChatMessage> _messages = [];
 
+  final List<String> _logs = [];
+  String _micStatus = "Chưa bắt đầu";
+
+  bool get _hasError => _logs.any((log) => log.contains("❌"));
+
+  bool _isDisposed = false;
+
+  // ignore: unused_field
+  bool _hasStarted = false;
+
+  String? _lastError;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _speech = stt.SpeechToText();
+    loadCategories();
+
+    // 👇 reset ngay khi vào màn
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resetSpeech();
+    });
+  }
+
+  //show log
+  void _log(String message) {
+    debugPrint(message);
+
+    if (!mounted) return;
+
+    setState(() {
+      _logs.add(message);
+    });
+  }
+
+  Future<void> _resetSpeech() async {
+    try {
+      await _speech.stop();
+      await _speech.cancel();
+
+      _speech = stt.SpeechToText();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isListening = false;
+        _micStatus = "Chưa bắt đầu";
+        _soundLevel = 0;
+        _initError = null;
+      });
+
+      _log("🔄 Reset mic");
+    } catch (e) {
+      _log("❌ Reset lỗi: $e");
+    }
+  }
+
+  Future<void> loadCategories() async {
+    // gọi API của bạn
+    categories = await CategoryService.fetchCategories();
+  }
+
   @override
   void dispose() {
     _speech.stop();
+    _speech.cancel();
+    _isDisposed = true;
     _textController.dispose();
     super.dispose();
   }
@@ -45,112 +116,218 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
   }
 
   Future<void> _startListening() async {
+    if (_isListening) return;
+    _initError = null;
+    _hasStarted = false;
+    // 👇 luôn tạo instance mới
+    _speech = stt.SpeechToText();
+    // 👇 reset sạch trước khi init lại
+    await _speech.stop();
+    await _speech.cancel();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isListening = false;
+      _micStatus = "🔄 Đang khởi động...";
+    });
+
+    _log("🎤 Bắt đầu xin quyền micro...");
+
     final status = await Permission.microphone.request();
 
+    _log("Permission: $status");
+
     if (status == PermissionStatus.denied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Vui lòng cấp quyền micro để sử dụng!")),
-      );
+      setState(() {
+        _isListening = false;
+        _micStatus = "❌ Không có quyền micro";
+      });
       return;
     }
 
     if (status == PermissionStatus.permanentlyDenied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Quyền micro bị chặn. Mở cài đặt để cấp quyền.'),
-          action: SnackBarAction(
-            label: 'Cài đặt',
-            onPressed: () => openAppSettings(),
-          ),
-        ),
-      );
+      _log("❌ Bị chặn vĩnh viễn → mở settings");
+      openAppSettings();
       return;
     }
 
     bool available = false;
-    _initError = null;
+
     try {
+      _log("⚙️ Init speech...");
       available = await _speech.initialize(
         onStatus: (status) {
-          debugPrint('Speech status: $status');
+          if (!mounted || _isDisposed) return; // 👈 thêm dòng này
+
+          _log("📡 Status: $status");
+
+          setState(() {
+            if (status == "listening") {
+              _isListening = true;
+              _micStatus = "🎤 Đang nghe...";
+            } else if (status == "notListening") {
+              _isListening = false;
+              _micStatus = "⏹ Đã dừng";
+            } else if (status == "done") {
+              _isListening = false;
+              _micStatus = "✅ Hoàn tất";
+            } else {
+              _micStatus = status;
+            }
+          });
         },
         onError: (error) {
-          debugPrint('Speech error: $error');
-          setState(() => _initError = error?.toString());
+          if (!mounted || _isDisposed) return;
+
+          final msg = "❌ ${error.errorMsg}";
+          _lastError = msg; // 👈 lưu lại lỗi thật
+
+          _log(msg);
+
+          setState(() {
+            _isListening = false;
+            _micStatus = msg;
+          });
         },
       );
     } catch (e) {
-      debugPrint('⚠️ Exception initializing speech: $e');
-      _initError = e.toString();
+      _log("💥 Exception init: $e");
     }
 
+    _log("Available: $available");
+
     if (!available) {
-      final message =
-          _initError ?? 'Không thể khởi tạo microphone trên thiết bị này.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      _log("❌ Device không hỗ trợ speech hoặc thiếu service");
+
+      setState(() {
+        _micStatus = "❌ Thiết bị không hỗ trợ Speech";
+        _initError = _micStatus;
+      });
+
       return;
     }
 
-    // show locales for debugging
-    try {
-      final locales = await _speech.locales();
-      debugPrint(
-        'Available locales: ${locales.map((l) => l.localeId).toList()}',
-      );
-    } catch (e) {
-      debugPrint('Could not fetch locales: $e');
-    }
-
     final localeId = await _preferredLocale();
-    debugPrint('Selected localeId: $localeId');
 
-    setState(() => _isListening = true);
+    if (localeId == null) {
+      setState(() {
+        _micStatus = "❌ Không có ngôn ngữ phù hợp";
+        _initError = _micStatus;
+      });
+      return;
+    }
+    _log("🌍 Locale: $localeId");
+
+    setState(() {
+      _micStatus = "🎤 Đang khởi động...";
+    });
 
     _speech.listen(
       onResult: (result) {
-        debugPrint(
-          '🗣 onResult final=${result.finalResult} words="${result.recognizedWords}"',
-        );
-        // some platforms may only provide final result at the end; log for debugging
-        try {
-          debugPrint('🗣 result obj: ${result.toString()}');
-        } catch (_) {}
+        _hasStarted = true;
+
+        if (!mounted || _isDisposed) return;
 
         setState(() {
           _textController.text = result.recognizedWords;
-          _textController.selection = TextSelection.fromPosition(
-            TextPosition(offset: _textController.text.length),
-          );
         });
 
-        if (result.finalResult && result.recognizedWords.trim().isEmpty) {
-          // final result empty — likely recognition failed; inform user
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Không nhận diện được giọng nói. Vui lòng thử lại.',
-              ),
-            ),
-          );
+        // 👇 nếu là kết quả cuối thì dừng luôn
+        if (result.finalResult) {
+          _stopListening();
         }
       },
       onSoundLevelChange: (level) {
-        debugPrint('sound level: $level');
-        setState(() => _soundLevel = level);
+        if (!mounted || _isDisposed) return;
+
+        if (level > 0) _hasStarted = true;
+
+        setState(() {
+          _soundLevel = level;
+
+          // 👇 FIX CỨNG: nếu có âm thanh thì chắc chắn đang nghe
+          if (!_isListening && level > 1) {
+            _isListening = true;
+            _micStatus = "🎤 Đang nghe...";
+          }
+        });
       },
       localeId: localeId,
-      listenMode: stt.ListenMode.dictation,
       partialResults: true,
-      onDevice: false,
-      listenFor: const Duration(seconds: 30),
     );
+
+    // 👇 auto stop sau 6s nếu user không nói nữa
+    Future.delayed(const Duration(seconds: 6), () {
+      if (!mounted || _isDisposed) return;
+
+      if (_isListening) {
+        _stopListening();
+        _log("⏱ Auto stop sau timeout");
+      }
+    });
+
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted || _isDisposed) return;
+
+      if (!_isListening && !_hasStarted) {
+        _micStatus = "⚠️ Đang chờ mic...";
+      }
+    });
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted || _isDisposed) return;
+
+      if (!_hasStarted) {
+        _speech.stop();
+
+        final errorMsg = _lastError ?? "❌ Không có âm thanh (timeout)";
+
+        setState(() {
+          _micStatus = errorMsg;
+          _initError = errorMsg;
+          _isListening = false;
+        });
+
+        _log("❌ Timeout: không có âm thanh");
+      }
+    });
   }
 
   Future<void> _stopListening() async {
-    await _speech.stop();
-    setState(() => _isListening = false);
+    try {
+      await _speech.stop();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isListening = false;
+        _micStatus = "⏹ Đã dừng"; // 👈 ép trạng thái luôn
+      });
+    } catch (e) {
+      _log("❌ Stop lỗi: $e");
+    }
+  }
+
+  String _buildMarkdown(ChatbotResult data) {
+    final sb = StringBuffer();
+
+    if (data.name.isNotEmpty) {
+      sb.writeln('### ${data.name}');
+    }
+    if (data.decision.isNotEmpty) {
+      sb.writeln('- Số quyết định: ${data.decision}');
+    }
+    if (data.typeName.isNotEmpty) {
+      sb.writeln('- Loại: ${data.typeName}');
+    }
+    if (data.fieldName.isNotEmpty) {
+      sb.writeln('- Lĩnh vực: ${data.fieldName}');
+    }
+
+    sb.writeln('- Đã phát hành: ${data.isPublished ? "Có" : "Không"}');
+
+    return sb.toString();
   }
 
   Future<void> _sendMessage(String text) async {
@@ -164,9 +341,19 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
 
     try {
       // 🔹 Gọi API nội bộ
-      final response = await ChatbotService.sendPrompt(text);
+      final result = await ChatbotService.sendPrompt(text);
+
+      // ❌ bỏ regex luôn
+      final field = result.fieldName;
+
       setState(() {
-        _messages.add(_ChatMessage(sender: "ai", text: response));
+        _messages.add(
+          _ChatMessage(
+            sender: "ai",
+            text: _buildMarkdown(result), // 👈 convert sang text hiển thị
+            field: field,
+          ),
+        );
       });
     } catch (e) {
       setState(() {
@@ -175,6 +362,82 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  CategoryModel? findCategoryByField(
+    String field,
+    List<CategoryModel> categories,
+  ) {
+    String normalize(String text) {
+      return text.toLowerCase().replaceAll('-', '').replaceAll(' ', '').trim();
+    }
+
+    try {
+      return categories.firstWhere(
+        (c) => normalize(c.title) == normalize(field),
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Widget _buildMessageWithClickableField(_ChatMessage message, bool isUser) {
+    final lines = message.text.split('\n');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines.map((line) {
+        if (line.contains('Lĩnh vực:')) {
+          final field = message.field ?? '';
+
+          return Row(
+            children: [
+              Text(
+                '• Lĩnh vực: ',
+                style: TextStyle(color: isUser ? Colors.white : Colors.black87),
+              ),
+              GestureDetector(
+                onTap: () {
+                  final category = findCategoryByField(
+                    field,
+                    categories, // 👈 nhớ có list này
+                  );
+
+                  if (category != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SubCategoryScreen(category: category),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Không tìm thấy lĩnh vực")),
+                    );
+                  }
+                },
+                child: Text(
+                  field,
+                  style: TextStyle(
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(
+            line,
+            style: TextStyle(color: isUser ? Colors.white : Colors.black87),
+          ),
+        );
+      }).toList(),
+    );
   }
 
   @override
@@ -221,45 +484,17 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
                               ),
                             ],
                           ),
-                          child: MarkdownBody(
-                            data: message.text,
-                            onTapLink: (text, href, title) async {
-                              if (href == null) return;
-                              final uri = Uri.tryParse(href);
-                              if (uri == null) return;
-                              try {
-                                await launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              } catch (e) {
-                                debugPrint('❌ Không mở được link: $e');
-                              }
-                            },
-                            styleSheet: MarkdownStyleSheet(
-                              p: TextStyle(
-                                color: isUser ? Colors.white : Colors.black87,
-                                fontSize: 15,
-                              ),
-                              a: TextStyle(
-                                color: isUser
-                                    ? Colors.yellowAccent
-                                    : Colors.blue,
-                                decoration: TextDecoration.underline,
-                              ),
-                              strong: TextStyle(
-                                color: isUser ? Colors.white : Colors.black,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              h2: TextStyle(
-                                color: isUser
-                                    ? Colors.white
-                                    : Colors.blue.shade700,
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                          child: message.field != null
+                              ? _buildMessageWithClickableField(message, isUser)
+                              : MarkdownBody(
+                                  data: message.text,
+                                  onTapLink: (text, href, title) async {
+                                    if (href == null) return;
+                                    final uri = Uri.tryParse(href);
+                                    if (uri == null) return;
+                                    await launchUrl(uri);
+                                  },
+                                ),
                         ),
                       );
                     },
@@ -315,6 +550,58 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
                       ],
                     ),
                   ),
+                // cảnh báo riêng cho Android TV / ROM China
+                if (_micStatus.contains("error_language_not_supported"))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      "⚠️ Thiết bị không hỗ trợ giọng nói",
+                      style: TextStyle(color: Colors.orange),
+                    ),
+                  ),
+                // 👇 debug log hiển thị ở đây
+                if (_hasError)
+                  Container(
+                    width: double.infinity,
+                    height: 200,
+                    margin: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _logs.map((log) {
+                          final isError = log.contains("❌");
+
+                          return Text(
+                            log,
+                            style: TextStyle(
+                              color: isError
+                                  ? Colors.redAccent
+                                  : Colors.greenAccent,
+                              fontSize: 12,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                // 👇 trạng thái mic
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    _micStatus,
+                    style: TextStyle(
+                      color: _micStatus.contains("❌")
+                          ? Colors.red
+                          : Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
                   child: Row(
@@ -402,5 +689,7 @@ class _VoiceAssistantPopupState extends State<VoiceAssistantPopup> {
 class _ChatMessage {
   final String sender;
   final String text;
-  _ChatMessage({required this.sender, required this.text});
+  final String? field;
+
+  _ChatMessage({required this.sender, required this.text, this.field});
 }

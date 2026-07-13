@@ -1,7 +1,7 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:niemyetdientu/model/procedure_detail_model.dart';
+import 'package:niemyetdientu/model/procedure_detail.dart';
+import 'package:niemyetdientu/model/procedure_detail_response.dart';
 import 'package:niemyetdientu/screens/pdf_viewer_screen.dart';
 import 'package:niemyetdientu/service/procedure_service.dart';
 import 'package:niemyetdientu/service/template_service.dart';
@@ -19,8 +19,12 @@ class DetailScreen extends StatefulWidget {
 }
 
 class _DetailScreenState extends State<DetailScreen> {
-  ProcedureDetail? detail;
+  ProcedureDetailResponse? response;
+  int currentPage = 0;
+  final PageController _pageController = PageController();
   bool isLoading = true;
+
+  ProcedureDetail get detail => response!.variants[currentPage];
 
   @override
   void initState() {
@@ -32,7 +36,7 @@ class _DetailScreenState extends State<DetailScreen> {
     try {
       final result = await ProcedureService.fetchProcedureDetail(widget.code);
       setState(() {
-        detail = result;
+        response = result;
         isLoading = false;
       });
     } catch (e) {
@@ -45,11 +49,25 @@ class _DetailScreenState extends State<DetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenW = MediaQuery.of(context).size.width;
+    final bool isTV = screenW >= 1200;
+    final chipFont = isTV ? 28.0 : 16.0;
+    final chipHPadding = isTV ? 24.0 : 12.0;
+    final chipVPadding = isTV ? 12.0 : 6.0;
+    final chipHeight = isTV ? 90.0 : 60.0;
+
+    // 🔥 tăng mạnh font
+    final double titleSize = screenW >= 1400
+        ? 36
+        : screenW >= 1000
+        ? 30
+        : 24;
+
     if (isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    if (detail == null) {
+    if (response == null || response!.variants.isEmpty) {
       return const Scaffold(
         body: Center(child: Text('Không tìm thấy dữ liệu')),
       );
@@ -57,151 +75,245 @@ class _DetailScreenState extends State<DetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(detail!.displayName, style: const TextStyle(fontSize: 42)),
+        title: Text(
+          detail.name,
+          style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: Column(
+        children: [
+          if (response!.count > 1)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Center(
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: isTV ? 12 : 6,
+                  runSpacing: isTV ? 12 : 6,
+                  children: List.generate(response!.variantCodes.length, (
+                    index,
+                  ) {
+                    final selected = index == currentPage;
+
+                    return ChoiceChip(
+                      label: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isTV ? 24 : 12,
+                          vertical: isTV ? 12 : 6,
+                        ),
+                        child: Text(
+                          response!.variantCodes[index],
+                          style: TextStyle(
+                            fontSize: isTV ? 28 : 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      selected: selected,
+                      onSelected: (_) {
+                        _pageController.animateToPage(
+                          index,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      },
+                    );
+                  }),
+                ),
+              ),
+            ),
+
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: response!.variants.length,
+              onPageChanged: (index) {
+                setState(() {
+                  currentPage = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                final detail = response!.variants[index];
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: _buildDetail(context, detail),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 🔥 Widget hiển thị một dòng thông tin
+Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SingleChildScrollView(
+        padding: const EdgeInsets.all(20), // 🔥 padding lớn hơn
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ===== Thông tin cơ bản =====
             Wrap(
-              spacing: 24,
-              runSpacing: 8,
+              spacing: 28,
+              runSpacing: 12,
               children: [
                 SizedBox(
-                  width: 500,
-                  child: FormRow(label: 'Mã', value: detail!.code),
+                  width: 520,
+                  child: FormRow(label: 'Mã', value: detail.code),
                 ),
                 SizedBox(
-                  width: 500,
+                  width: 520,
                   child: FormRow(
                     label: 'Niêm yết',
-                    value: detail!.isPublished ? 'Có' : 'Không',
+                    value: detail.isPublished ? 'Có' : 'Không',
                   ),
                 ),
                 SizedBox(
-                  width: 500,
-                  child: FormRow(label: 'Tên', value: detail!.displayName),
+                  width: 520,
+                  child: FormRow(label: 'Tên', value: detail.name),
                 ),
                 SizedBox(
-                  width: 500,
+                  width: 520,
                   child: FormRow(
                     label: 'Số quyết định',
-                    value: detail!.decisionNumber ?? '—',
+                    value: detail.decisionNumber ?? '—',
                   ),
                 ),
                 SizedBox(
-                  width: 500,
+                  width: 520,
                   child: FormRow(
                     label: 'Lĩnh vực',
-                    value:
-                        (detail!.procedureFieldId is List &&
-                            detail!.procedureFieldId!.length > 1)
-                        ? detail!.procedureFieldId![1].toString()
-                        : '—',
+                    value: detail.procedureField?.name ?? '—',
                   ),
                 ),
                 SizedBox(
-                  width: 500,
+                  width: 520,
                   child: FormRow(
                     label: 'Cấp thực hiện',
-                    value:
-                        (detail!.implementationLevelId is List &&
-                            detail!.implementationLevelId!.length > 1)
-                        ? detail!.implementationLevelId![1].toString()
-                        : '—',
+                    value: detail.implementationLevel?.name ?? '—',
                   ),
                 ),
                 SizedBox(
-                  width: 500,
+                  width: 520,
                   child: FormRow(
                     label: 'Cơ quan thẩm quyền',
-                    value:
-                        (detail!.competentAgencyId is List &&
-                            detail!.competentAgencyId!.length > 1)
-                        ? detail!.competentAgencyId![1].toString()
-                        : '—',
+                    value: detail.competentAgency?.name ?? '—',
                   ),
                 ),
                 SizedBox(
-                  width: 500,
+                  width: 520,
+                  child: FormRow(
+                    label: 'Cơ quan thực hiện',
+                    value: detail.implementationAgencies.isEmpty
+                        ? '—'
+                        : detail.implementationAgencies
+                              .map((e) => e.name)
+                              .join(', '),
+                  ),
+                ),
+                SizedBox(
+                  width: 520,
+                  child: FormRow(
+                    label: 'Đối tượng',
+                    value: detail.implementationObjects.isEmpty
+                        ? '—'
+                        : detail.implementationObjects
+                              .map((e) => e.name)
+                              .join(', '),
+                  ),
+                ),
+                SizedBox(
+                  width: 520,
                   child: FormRow(
                     label: 'Địa chỉ nhận',
-                    value: detail!.receivingAddress ?? '—',
+                    value: detail.receivingAddress ?? '—',
+                  ),
+                ),
+                SizedBox(
+                  width: 520,
+                  child: FormRow(
+                    label: 'Loại thủ tục',
+                    value: detail.procedureType?.name ?? '—',
+                  ),
+                ),
+                SizedBox(
+                  width: 520,
+                  child: FormRow(
+                    label: 'Mã hiển thị',
+                    value: detail.displayCode,
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             const Divider(),
 
-            // ===== Trình tự thực hiện =====
             FormRow(
               label: 'Trình tự thực hiện',
-              value: detail!.implementationSequence ?? '—',
+              value: detail.implementationSequence ?? '—',
             ),
 
             const Divider(),
 
-            // ===== Yêu cầu, điều kiện =====
             FormRow(
               label: 'Yêu cầu, điều kiện',
-              value: detail!.requirementsForImplementation ?? '—',
+              value: detail.requirementsForImplementation ?? '—',
             ),
 
             const Divider(),
 
-            // ===== Kết quả =====
             FormRow(
               label: 'Kết quả',
-              value: detail!.implementationResult ?? '—',
+              value: detail.implementationResult ?? '—',
             ),
 
             const Divider(),
 
-            // ===== Từ khóa =====
-            FormRow(label: 'Từ khóa', value: detail!.keywords ?? '—'),
+            FormRow(label: 'Từ khóa', value: detail.keywords ?? '—'),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 36),
 
-            // ===== Thành phần hồ sơ =====
             Text(
               'Thành phần hồ sơ',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 26, // 🔥 to hơn
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 350,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.4,
+                maxCrossAxisExtent: 380,
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
+                childAspectRatio: 1.35,
               ),
-              itemCount: detail?.components?.length ?? 0,
+              itemCount: detail.components.length,
               itemBuilder: (context, index) {
-                final component = detail!.components![index];
+                final component = detail.components[index];
 
                 return DocumentCard(
                   name: component.name,
                   originals: component.numberOfOriginals,
                   copies: component.numberOfCopies,
 
-                  /// 👁️ Xem biểu mẫu (PDF)
                   onView: () async {
                     try {
-                      final rawTemplateId = component.templateId;
+                      final int? templateId = component.template?.id;
 
-                      // ❌ Không có biểu mẫu
-                      if (rawTemplateId == null || rawTemplateId == false) {
+                      if (templateId == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Biểu mẫu này chưa được cấu hình'),
@@ -210,24 +322,10 @@ class _DetailScreenState extends State<DetailScreen> {
                         return;
                       }
 
-                      // ❌ Sai format
-                      if (rawTemplateId is! List || rawTemplateId.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Dữ liệu biểu mẫu không hợp lệ'),
-                          ),
-                        );
-                        return;
-                      }
-
-                      // ✅ Odoo many2one → lấy ID
-                      final int templateId = rawTemplateId[0];
-
                       final template = await TemplateService.fetchTemplateById(
                         templateId,
                       );
 
-                      // ❌ Không có file PDF
                       if (template.printFileBase64.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -237,12 +335,10 @@ class _DetailScreenState extends State<DetailScreen> {
                         return;
                       }
 
-                      // ✅ Tạo file PDF
                       final pdfFile = await createPdfFromBase64(
                         template.printFileBase64,
                       );
 
-                      // ✅ Mở màn hình xem PDF
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -250,10 +346,7 @@ class _DetailScreenState extends State<DetailScreen> {
                               PdfViewerScreen(filePath: pdfFile.path),
                         ),
                       );
-                    } catch (e, s) {
-                      debugPrint('[UI] Lỗi xem PDF: $e');
-                      debugPrintStack(stackTrace: s);
-
+                    } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Không thể mở biểu mẫu PDF'),
@@ -262,37 +355,18 @@ class _DetailScreenState extends State<DetailScreen> {
                     }
                   },
 
-                  /// 🖨️ In biểu mẫu
                   onPrint: () async {
                     try {
-                      final rawTemplateId = component.templateId;
+                      final int? templateId = component.template?.id;
 
-                      // ❌ Không có biểu mẫu
-                      if (rawTemplateId == null || rawTemplateId == false) {
+                      if (templateId == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                              'Thủ tục này không có biểu mẫu để in',
-                            ),
+                            content: Text('Không có biểu mẫu để in'),
                           ),
                         );
                         return;
                       }
-
-                      // ❌ Sai format
-                      if (rawTemplateId is! List || rawTemplateId.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Dữ liệu biểu mẫu không hợp lệ'),
-                          ),
-                        );
-                        return;
-                      }
-
-                      // ✅ Odoo format: [id, name]
-                      final int templateId = rawTemplateId[0];
-
-                      debugPrint('🖨 In biểu mẫu templateId = $templateId');
 
                       final template = await TemplateService.fetchTemplateById(
                         templateId,
@@ -309,7 +383,6 @@ class _DetailScreenState extends State<DetailScreen> {
 
                       final pdfBytes = base64Decode(template.printFileBase64);
 
-                      // ✅ IN – hỗ trợ Windows
                       await Printing.layoutPdf(
                         onLayout: (_) async => pdfBytes,
                         name: template.printFilename.isNotEmpty
@@ -317,7 +390,6 @@ class _DetailScreenState extends State<DetailScreen> {
                             : 'bieu_mau.pdf',
                       );
                     } catch (e) {
-                      debugPrint('❌ Lỗi khi in PDF: $e');
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Không thể in biểu mẫu')),
                       );
@@ -326,11 +398,24 @@ class _DetailScreenState extends State<DetailScreen> {
                 );
               },
             ),
+            const SizedBox(height: 30),
+
+            Text(
+              "Cơ sở pháp lý",
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+
+            ...detail.legalGrounds.map(
+              (e) => ListTile(
+                title: Text(e.referenceNumber),
+                subtitle: Text(e.summary),
+              ),
+            ),
           ],
         ),
       ),
-    );
-  }
+    ],
+  );
 }
 
 class FormRow extends StatelessWidget {
@@ -341,27 +426,45 @@ class FormRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenW = MediaQuery.of(context).size.width;
+
+    // 🔥 tăng mạnh font
+    final double labelFontSize = screenW >= 1400
+        ? 20
+        : screenW >= 1000
+        ? 18
+        : 16;
+
+    final double valueFontSize = screenW >= 1400
+        ? 20
+        : screenW >= 1000
+        ? 17
+        : 15;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 180,
-            child: RichText(
-              text: TextSpan(
-                text: label,
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
-                ),
+            width: screenW >= 1400 ? 240 : 200,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+                fontSize: labelFontSize,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value.isNotEmpty ? value : '—',
-              style: const TextStyle(color: Colors.black87),
+              style: TextStyle(
+                color: Colors.black87,
+                fontSize: valueFontSize,
+                height: 1.6, // 🔥 dễ đọc hơn
+              ),
             ),
           ),
         ],

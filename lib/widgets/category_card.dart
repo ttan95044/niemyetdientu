@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:niemyetdientu/model/category_model.dart';
 import 'package:niemyetdientu/screens/sub_category_screen.dart';
-import 'responsive_text.dart';
 
 class CategoryCard extends StatefulWidget {
   final CategoryModel category;
@@ -22,6 +21,7 @@ class CategoryCard extends StatefulWidget {
 
 class _CategoryCardState extends State<CategoryCard> {
   bool _isPressed = false;
+  bool _isFocused = false;
   final AudioPlayer _player = AudioPlayer();
 
   String _getInitials(String title) {
@@ -46,113 +46,125 @@ class _CategoryCardState extends State<CategoryCard> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) {
-        setState(() => _isPressed = true);
-      },
-      onTapUp: (_) async {
-        setState(() => _isPressed = false);
-        await _playClickSound();
-        widget.onTap?.call();
-      },
-      onTapCancel: () {
-        setState(() => _isPressed = false);
-      },
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => SubCategoryScreen(category: widget.category),
-          ),
-        );
-      },
+    final width = MediaQuery.of(context).size.width;
 
-      child: AnimatedScale(
-        scale: _isPressed ? 0.95 : 1.0,
-        duration: const Duration(milliseconds: 50),
-        curve: Curves.easeOut,
-        child: SizedBox(
-          height: widget.height ?? 96,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              decoration: BoxDecoration(
-                // gentle gradient based on category color
-                gradient: LinearGradient(
-                  colors: [
-                    HSLColor.fromColor(Color(int.parse(widget.category.color)))
-                        .withLightness(
-                          (HSLColor.fromColor(
-                                    Color(int.parse(widget.category.color)),
-                                  ).lightness -
-                                  0.06)
-                              .clamp(0.0, 1.0),
-                        )
-                        .toColor(),
+    // 🔥 breakpoint
+    final bool isTV = width >= 1200;
+
+    // 🎯 size config
+    final double cardHeight = widget.height ?? (isTV ? 180 : 96);
+    final double avatarRadius = isTV ? 56 : 28;
+    final double titleSize = isTV ? 32 : 16;
+    final double iconSize = isTV ? 28 : 16;
+    final double paddingH = isTV ? 28 : 12;
+    final double spacing = isTV ? 20 : 12;
+    final double borderRadius = isTV ? 24 : 16;
+
+    return FocusableActionDetector(
+      onShowFocusHighlight: (value) {
+        setState(() => _isFocused = value);
+      },
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) async {
+          setState(() => _isPressed = false);
+          await _playClickSound();
+          widget.onTap?.call();
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SubCategoryScreen(category: widget.category),
+            ),
+          );
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+
+        child: AnimatedScale(
+          scale: _isPressed
+              ? 0.96
+              : _isFocused
+              ? 1.05
+              : 1.0,
+          duration: const Duration(milliseconds: 120),
+
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: cardHeight,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(borderRadius),
+
+              // 🎨 gradient
+              gradient: LinearGradient(
+                colors: [
+                  HSLColor.fromColor(
                     Color(int.parse(widget.category.color)),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
+                  ).withLightness(0.4).toColor(),
+                  Color(int.parse(widget.category.color)),
                 ],
               ),
 
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Color(int.parse(widget.category.color)),
-                      child: Text(
-                        _getInitials(widget.category.title),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.category.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black26,
-                                  offset: Offset(0, 1),
-                                  blurRadius: 2,
-                                ),
-                              ],
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                  ],
+              // ✨ shadow + focus glow
+              boxShadow: [
+                BoxShadow(
+                  color: _isFocused
+                      ? Colors.white.withOpacity(0.5)
+                      : Colors.black.withOpacity(0.2),
+                  blurRadius: _isFocused ? 20 : 8,
+                  spreadRadius: _isFocused ? 2 : 0,
+                  offset: const Offset(0, 6),
                 ),
+              ],
+
+              border: _isFocused
+                  ? Border.all(color: Colors.white, width: 2)
+                  : null,
+            ),
+
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: paddingH),
+              child: Row(
+                children: [
+                  // 🔵 Avatar
+                  CircleAvatar(
+                    radius: avatarRadius,
+                    backgroundColor: Color(int.parse(widget.category.color)),
+                    child: Text(
+                      _getInitials(widget.category.title),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isTV ? 26 : 14,
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(width: spacing),
+
+                  // 📝 Title
+                  Expanded(
+                    child: Text(
+                      widget.category.title,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: titleSize,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+
+                  SizedBox(width: spacing),
+
+                  // ➡️ Icon
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: iconSize,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ],
               ),
             ),
           ),

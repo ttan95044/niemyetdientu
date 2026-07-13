@@ -32,178 +32,242 @@ class _SubCategoryScreenState extends State<SubCategoryScreen> {
       final data = await ProcedureService.fetchProceduresByFieldCode(
         widget.category.code,
       );
+
+      // Loại bỏ các phần tử trùng code
+      final uniqueProcedures = <String, ProcedureModel>{};
+
+      for (final item in data) {
+        uniqueProcedures[item.code] = item;
+      }
+
       setState(() {
-        _procedures = data;
+        _procedures = uniqueProcedures.values.toList();
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(
-        // ignore: use_build_context_synchronously
         context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi tải dữ liệu: $e')));
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
+  }
+
+  void showVoicePopup() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54, // nền mờ TV
+      builder: (context) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 900, // TV rộng nhưng không full
+              maxHeight: 1200, // 👈 giữ “lưng lưng”
+            ),
+            child: Material(
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: const VoiceAssistantPopup(),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final width = size.width;
+
+    final bool isTV = width >= 1200;
+
+    // 🎯 SIZE CONFIG
+    final double padding = isTV ? 32 : 16;
+    final double spacing = isTV ? 24 : 16;
+    final double searchHeight = isTV ? 72 : 48;
+    final double searchFont = isTV ? 22 : 14;
+    final double itemFont = isTV ? 22 : 16;
+    final double titleSize = isTV ? 28 : 18;
+    final double buttonSize = isTV ? 100 : width * 0.12;
+
     final Color borderColor = Color(int.parse(widget.category.color));
+
     final filtered = _procedures
         .where((p) => p.name.toLowerCase().contains(_query.toLowerCase()))
         .toList();
 
-    void showVoicePopup() {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent, // để viền bo đẹp hơn
-        builder: (context) {
-          return FractionallySizedBox(
-            heightFactor:
-                0.85, // 👈 85% chiều cao màn hình (giảm nếu muốn thấp hơn)
-            child: const VoiceAssistantPopup(),
-          );
-        },
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
-        title: LayoutBuilder(
-          builder: (context, constraints) {
-            final screenW = MediaQuery.of(context).size.width;
-            final double fontSize = screenW >= 1200
-                ? 28
-                : screenW >= 800
-                ? 22
-                : 18;
-            return Text(
-              widget.category.title,
-              style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            );
-          },
-        ),
         backgroundColor: borderColor,
         foregroundColor: Colors.white,
+        title: Text(
+          widget.category.title,
+          style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.w600),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _procedures.isEmpty
-          ? const Center(child: Text("Không có thủ tục con nào."))
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: "Tìm kiếm thủ tục con...",
-                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                      suffixIcon: _query.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, color: Colors.grey),
-                              onPressed: () => setState(() {
-                                _searchController.clear();
-                                _query = '';
-                              }),
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: borderColor, width: 1.5),
+
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    /// 🔍 SEARCH
+                    Padding(
+                      padding: EdgeInsets.all(padding),
+                      child: SizedBox(
+                        height: searchHeight,
+                        child: TextField(
+                          controller: _searchController,
+                          style: TextStyle(fontSize: searchFont),
+                          decoration: InputDecoration(
+                            hintText: "Tìm kiếm thủ tục...",
+                            hintStyle: TextStyle(fontSize: searchFont),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              size: isTV ? 28 : 20,
+                            ),
+                            suffixIcon: _query.isNotEmpty
+                                ? IconButton(
+                                    icon: Icon(
+                                      Icons.clear,
+                                      size: isTV ? 28 : 20,
+                                    ),
+                                    onPressed: () => setState(() {
+                                      _searchController.clear();
+                                      _query = "";
+                                    }),
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: isTV ? 20 : 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                isTV ? 20 : 12,
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) => setState(() => _query = value),
+                        ),
                       ),
                     ),
-                    onChanged: (value) => setState(() => _query = value),
-                  ),
-                ),
 
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final crossAxisCount = (constraints.maxWidth ~/ 280)
-                          .clamp(1, 6);
-                      final double tileWidth =
-                          (constraints.maxWidth - (crossAxisCount - 1) * 16) /
-                          crossAxisCount;
-                      final double childAspect =
-                          tileWidth / 92; // aim for ~92px height
+                    /// 📦 GRID (1 HÀNG 3 CÁI TRÊN TV)
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          int crossAxisCount = isTV
+                              ? 3 // 🔥 TV: 3 item / row
+                              : (constraints.maxWidth ~/ 300).clamp(1, 2);
 
-                      return GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: childAspect.clamp(1.8, 4.5),
-                        ),
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final p = filtered[index];
-                          return Material(
-                            color: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(color: borderColor, width: 1.5),
-                            ),
-                            elevation: 1,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      DetailScreen(code: p.code),
+                          return GridView.builder(
+                            padding: EdgeInsets.symmetric(horizontal: padding),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  crossAxisSpacing: spacing,
+                                  mainAxisSpacing: spacing,
+                                  childAspectRatio: isTV ? 3.5 : 3.2,
                                 ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12.0,
-                                  vertical: 10.0,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    p.name,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: borderColor,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) {
+                              final p = filtered[index];
+
+                              return Material(
+                                color: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    isTV ? 20 : 16,
+                                  ),
+                                  side: BorderSide(
+                                    color: borderColor,
+                                    width: isTV ? 2 : 1.5,
                                   ),
                                 ),
-                              ),
-                            ),
+                                elevation: 2,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(
+                                    isTV ? 20 : 16,
+                                  ),
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          DetailScreen(code: p.code),
+                                    ),
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: isTV ? 20 : 12,
+                                      vertical: isTV ? 16 : 10,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        p.name,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: itemFont,
+                                          fontWeight: FontWeight.w600,
+                                          color: borderColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
-                      );
-                    },
+                      ),
+                    ),
+                  ],
+                ),
+
+          /// 🤖 BOT (GIỮA BÊN PHẢI)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: EdgeInsets.only(right: isTV ? 40 : 16),
+              child: GestureDetector(
+                onTap: showVoicePopup,
+                child: Container(
+                  width: buttonSize,
+                  height: buttonSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.blue.shade600,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.4),
+                        blurRadius: isTV ? 30 : 20,
+                        spreadRadius: isTV ? 8 : 5,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: SvgPicture.asset(
+                      'assets/icons/bot.svg',
+                      width: buttonSize * 0.45,
+                      height: buttonSize * 0.45,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blue.shade600,
-        onPressed: showVoicePopup,
-        child: SvgPicture.asset(
-          'assets/icons/bot.svg',
-          width: 38,
-          height: 38,
-          color: Colors.white,
-        ),
+          ),
+        ],
       ),
     );
   }
