@@ -7,7 +7,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   pdfx
   permission_handler_windows
   printing
-  speech_to_text_windows
   url_launcher_windows
 )
 

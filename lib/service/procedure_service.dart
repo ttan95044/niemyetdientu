@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:niemyetdientu/model/procedure_detail_response.dart';
 import 'package:niemyetdientu/model/procedure_model.dart';
-import 'package:niemyetdientu/model/procedure_detail.dart';
 import 'package:niemyetdientu/service/base.dart';
 
 class ProcedureService {

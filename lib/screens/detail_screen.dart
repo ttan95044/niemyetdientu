@@ -51,10 +51,6 @@ class _DetailScreenState extends State<DetailScreen> {
   Widget build(BuildContext context) {
     final screenW = MediaQuery.of(context).size.width;
     final bool isTV = screenW >= 1200;
-    final chipFont = isTV ? 28.0 : 16.0;
-    final chipHPadding = isTV ? 24.0 : 12.0;
-    final chipVPadding = isTV ? 12.0 : 6.0;
-    final chipHeight = isTV ? 90.0 : 60.0;
 
     // 🔥 tăng mạnh font
     final double titleSize = screenW >= 1400
@@ -161,6 +157,12 @@ Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            detail.variantText != null
+                ? FormRow(
+                    label: 'Nội dung trường hợp',
+                    value: detail.variantText ?? "—",
+                  )
+                : const SizedBox.shrink(),
             Wrap(
               spacing: 28,
               runSpacing: 12,
@@ -176,10 +178,19 @@ Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
                     value: detail.isPublished ? 'Có' : 'Không',
                   ),
                 ),
-                SizedBox(
-                  width: 520,
-                  child: FormRow(label: 'Tên', value: detail.name),
-                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            FormRow(label: 'Tên', value: detail.name),
+
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 28,
+              runSpacing: 12,
+              children: [
                 SizedBox(
                   width: 520,
                   child: FormRow(

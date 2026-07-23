@@ -34,6 +34,8 @@ class ProcedureDetail {
   final List<LegalGround> legalGrounds;
   final List<SubmissionType> submissionTypes;
 
+  final String? variantText;
+
   ProcedureDetail({
     required this.id,
     required this.code,
@@ -58,6 +60,7 @@ class ProcedureDetail {
     required this.components,
     required this.legalGrounds,
     required this.submissionTypes,
+    this.variantText,
   });
 
   factory ProcedureDetail.fromJson(Map<String, dynamic> json) {
@@ -128,6 +131,10 @@ class ProcedureDetail {
       submissionTypes: (json["submission_types"] as List? ?? [])
           .map((e) => SubmissionType.fromJson(e))
           .toList(),
+
+      variantText: json["variant_text"] is String
+          ? json["variant_text"] as String
+          : null,
     );
   }
 }

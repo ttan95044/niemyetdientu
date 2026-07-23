@@ -12,8 +12,7 @@ class ChatbotService {
   static const String _baseUrl =
       '${BaseService.apiUrlChatbot}/webhook/${BaseService.apiKeyChatbot}';
 
-  static Future<ChatbotResult> sendPrompt(String prompt) async {
-    /// ✅ bypass SSL certificate
+  static Future<List<ChatbotResult>> sendPrompt(String prompt) async {
     final httpClient = HttpClient()
       ..badCertificateCallback =
           (X509Certificate cert, String host, int port) => true;
@@ -30,8 +29,11 @@ class ChatbotService {
       throw Exception('Lỗi server: ${response.statusCode}\n${response.body}');
     }
 
-    final data = jsonDecode(response.body);
+    final List<dynamic> data = jsonDecode(response.body);
 
-    return ChatbotResult.fromJson(data);
+    return data
+        .map((e) => ChatbotResult.fromJson(e))
+        .take(5) // lấy tối đa 5 kết quả
+        .toList();
   }
 }

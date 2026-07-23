@@ -1,17 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 🔹 Thêm dòng này ngay dưới đây -->
+    <!-- Quyền -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- TV hoặc thiết bị không có mic vẫn cài được -->
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
 
     <application
-        android:usesCleartextTraffic="true"
-        android:label="niemyetdientu"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        
+        android:label="niemyetdientu"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
@@ -41,9 +43,12 @@
     </application>
 
     <queries>
+
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
+
     </queries>
+
 </manifest>
