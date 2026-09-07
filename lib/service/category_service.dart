@@ -1,13 +1,15 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:niemyetdientu/model/category_model.dart';
 import 'package:niemyetdientu/service/base.dart';
-import 'package:flutter/painting.dart';
 
 class CategoryService {
-  static final String apiUrl = "${BaseService.apiUrl}/fields";
+  static Future<List<CategoryModel>> fetchCategories({
+    int companyId = 1,
+  }) async {
+    final String apiUrl = "${BaseService.apiUrl}/fields?company_id=$companyId";
 
-  static Future<List<CategoryModel>> fetchCategories() async {
     final response = await http.get(
       Uri.parse(apiUrl),
       headers: {'X-API-KEY': BaseService.apiKey, 'Accept': 'application/json'},
@@ -19,6 +21,7 @@ class CategoryService {
       return data.map((item) {
         final id = item['id'] as int;
         final model = CategoryModel.fromJson(item);
+
         return model.copyWith(icon: _getIconById(id), color: _getColorById(id));
       }).toList();
     } else {
@@ -54,24 +57,26 @@ class CategoryService {
   }
 
   static String _getColorById(int id) {
-    // Base color: 0xFF9C27B0
     if (id <= 0) return "0xFF9C27B0";
 
     const int baseColorInt = 0xFF9C27B0;
+
     final Color baseColor = Color(baseColorInt);
     final HSLColor baseHsl = HSLColor.fromColor(baseColor);
 
-    // Use the golden angle (~137.5) to step the hue for good distribution.
     const double goldenAngle = 137.5;
+
     final double hue = (baseHsl.hue + (id - 1) * goldenAngle) % 360;
 
     final HSLColor newHsl = baseHsl.withHue(hue);
+
     final Color newColor = newHsl.toColor();
 
     final String hex = newColor.value
         .toRadixString(16)
         .padLeft(8, '0')
         .toUpperCase();
+
     return '0x$hex';
   }
 }

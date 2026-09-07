@@ -36,6 +36,8 @@ class ProcedureDetail {
 
   final String? variantText;
 
+  final String? urlQrcode;
+
   ProcedureDetail({
     required this.id,
     required this.code,
@@ -61,6 +63,7 @@ class ProcedureDetail {
     required this.legalGrounds,
     required this.submissionTypes,
     this.variantText,
+    this.urlQrcode,
   });
 
   factory ProcedureDetail.fromJson(Map<String, dynamic> json) {
@@ -134,6 +137,9 @@ class ProcedureDetail {
 
       variantText: json["variant_text"] is String
           ? json["variant_text"] as String
+          : null,
+      urlQrcode: json["url_qrcode"] is String
+          ? json["url_qrcode"] as String
           : null,
     );
   }

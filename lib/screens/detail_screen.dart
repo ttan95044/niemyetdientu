@@ -5,9 +5,11 @@ import 'package:niemyetdientu/model/procedure_detail_response.dart';
 import 'package:niemyetdientu/screens/pdf_viewer_screen.dart';
 import 'package:niemyetdientu/service/procedure_service.dart';
 import 'package:niemyetdientu/service/template_service.dart';
+import 'package:niemyetdientu/utils/file_helper.dart';
 import 'package:niemyetdientu/widgets/create_pdf.dart';
 import 'package:niemyetdientu/widgets/document_card.dart';
 import 'package:printing/printing.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class DetailScreen extends StatefulWidget {
   final String code;
@@ -160,13 +162,38 @@ Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
             detail.variantText != null
                 ? FormRow(
                     label: 'Nội dung trường hợp',
-                    value: detail.variantText ?? "—",
+                    value: detail.variantText!,
                   )
                 : const SizedBox.shrink(),
             Wrap(
               spacing: 28,
               runSpacing: 12,
               children: [
+                if (detail.urlQrcode != null && detail.urlQrcode!.isNotEmpty)
+                  Center(
+                    child: Column(
+                      children: [
+                        QrImageView(
+                          data: detail.urlQrcode!,
+                          version: QrVersions.auto,
+                          size: 220,
+                          backgroundColor: Colors.white,
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        const Text(
+                          "Quét mã QR để xem trên điện thoại",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                        const SizedBox(height: 30),
+                      ],
+                    ),
+                  ),
                 SizedBox(
                   width: 520,
                   child: FormRow(label: 'Mã', value: detail.code),
@@ -327,7 +354,7 @@ Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
                       if (templateId == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Biểu mẫu này chưa được cấu hình'),
+                            content: Text('Biểu mẫu này chưa có !'),
                           ),
                         );
                         return;
@@ -338,30 +365,40 @@ Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
                       );
 
                       if (template.printFileBase64.isEmpty) {
+                        // ignore: use_build_context_synchronously
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Biểu mẫu chưa có file PDF'),
+                            content: Text('Biểu mẫu chưa có file'),
                           ),
                         );
                         return;
                       }
 
-                      final pdfFile = await createPdfFromBase64(
-                        template.printFileBase64,
-                      );
+                      if (template.isPdf) {
+                        final pdfFile = await createPdfFromBase64(
+                          template.printFileBase64,
+                        );
 
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              PdfViewerScreen(filePath: pdfFile.path),
-                        ),
-                      );
+                        Navigator.push(
+                          // ignore: use_build_context_synchronously
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PdfViewerScreen(filePath: pdfFile.path),
+                          ),
+                        );
+                      } else {
+                        await FileHelper.openFile(
+                          base64: template.printFileBase64,
+                          filename: template.printFilename,
+                        );
+                      }
                     } catch (e) {
+                      debugPrint(e.toString());
+
+                      // ignore: use_build_context_synchronously
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Không thể mở biểu mẫu PDF'),
-                        ),
+                        const SnackBar(content: Text('Không thể mở biểu mẫu')),
                       );
                     }
                   },
@@ -384,9 +421,20 @@ Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
                       );
 
                       if (template.printFileBase64.isEmpty) {
+                        // ignore: use_build_context_synchronously
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Biểu mẫu chưa có file PDF'),
+                            content: Text('Biểu mẫu chưa có file'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (!template.isPdf) {
+                        // ignore: use_build_context_synchronously
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Chỉ hỗ trợ in trực tiếp file PDF.'),
                           ),
                         );
                         return;
@@ -401,6 +449,7 @@ Widget _buildDetail(BuildContext context, ProcedureDetail detail) {
                             : 'bieu_mau.pdf',
                       );
                     } catch (e) {
+                      // ignore: use_build_context_synchronously
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Không thể in biểu mẫu')),
                       );
